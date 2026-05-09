@@ -9,9 +9,9 @@ const Sidebar = () => {
   ];
 
   return (
-    <div className="flex flex-col h-screen w-64 bg-slate-900 text-white p-4 fixed left-0 top-0">
+    <div className="flex flex-col h-screen w-64 bg-teal-900 text-white p-4 fixed left-0 top-0">
       <div className="mb-10 mt-4 px-2">
-        <h1 className="text-xl font-bold text-blue-400">Skin Cancer - CNN</h1>
+        <h1 className="text-xl font-bold text-teal-100">Skin Cancer - CNN</h1>
         <p className="text-xs text-slate-400">Panel de Control</p>
       </div>
 
@@ -23,7 +23,7 @@ const Sidebar = () => {
                 href={item.path}
                 className="flex items-center gap-3 p-3 rounded-lg hover:bg-slate-800 transition-colors group"
               >
-                <span className="text-slate-400 group-hover:text-blue-400">
+                <span className="text-slate-400 group-hover:text-teal-400">
                   {item.icon}
                 </span>
                 <span className="font-medium">{item.name}</span>
@@ -34,7 +34,7 @@ const Sidebar = () => {
       </nav>
 
       <div className="border-t border-slate-800 pt-4">
-        <button className="flex items-center gap-3 p-3 w-full rounded-lg hover:bg-green-900/20 text-green-400 transition-colors">
+        <button className="flex items-center gap-3 p-3 w-full rounded-xl hover:bg-slate-800 text-green-400 transition-colors">
           <LogIn size={20} />
           <span className="font-medium">Iniciar Sesión</span>
         </button>
