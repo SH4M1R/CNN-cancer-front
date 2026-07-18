@@ -1,218 +1,245 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from 'react';
+import { ImagePlus, AlertTriangle, CheckCircle, RefreshCw } from 'lucide-react';
 
-// Diccionario para traducir las clases técnicas de la CNN a lenguaje humano
-const MAPEO_CLASES = {
-  "clase_0": "lesión benigna",
-  "clase_1": "carcinoma basocelular",
-  "clase_2": "melanoma"
+// Mapeo exacto de las clases
+const CLASES = {
+  'clase_0': 'Lesión benigna',
+  'clase_1': 'Carcinoma basocelular',
+  'clase_2': 'Melanoma'
 };
 
-export default function Prediccion() {
-  const [imagen, setImagen] = useState(null);
-  const [vistaPrevia, setVistaPrevia] = useState(null);
-  const [resultado, setResultado] = useState(null);
-  const [cargando, setCargando] = useState(false);
-  const [modelo, setModelo] = useState(null);
-  const [errorModelo, setErrorModelo] = useState(false);
+const TAMANO_MODELO = 224;
 
-  // 1. Cargar el modelo TFLite de forma genérica (más permisivo con los metadatos)
+export default function PrediccionPage() {
+  const [tfliteRunner, setTfliteRunner] = useState(null);
+  const [cargandoModelo, setCargandoModelo] = useState(true);
+  const [imagenUrl, setImagenUrl] = useState(null);
+  const [analizando, setAnalizando] = useState(false);
+  const [resultado, setResultado] = useState(null);
+  const [error, setError] = useState(null);
+
+  const fileInputRef = useRef(null);
+  const imageRef = useRef(null);
+
+  // 1. Cargar las librerías oficiales de TensorFlow.js desde CDN e iniciar el modelo .tflite
   useEffect(() => {
-    async function cargarModelo() {
+    async function cargarBibliotecaTFLite() {
       try {
-        if (window.tflite) {
-          // Cargamos el archivo directo desde la raíz pública
-          const modelLoaded = await window.tflite.loadTFLiteModel("/model.tflite");
-          setModelo(modelLoaded);
-          setErrorModelo(false);
-        } else {
-          // Si la CDN aún no se ha montado en el objeto window, reintentamos en medio segundo
-          setTimeout(cargarModelo, 500);
+        if (!window.tf) {
+          const scriptTF = document.createElement('script');
+          scriptTF.src = "https://cdn.jsdelivr.net/npm/@tensorflow/tfjs/dist/tf.min.js";
+          document.head.appendChild(scriptTF);
+          await new Promise((resolve) => scriptTF.onload = resolve);
         }
+
+        if (!window.tflite) {
+          const scriptTFLite = document.createElement('script');
+          scriptTFLite.src = "https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-tflite/dist/tf-tflite.min.js";
+          document.head.appendChild(scriptTFLite);
+          await new Promise((resolve) => scriptTFLite.onload = resolve);
+        }
+
+        // Cargar el archivo binario desde la carpeta /public
+        const modeloCargado = await window.tflite.loadTFLiteModel('/model.tflite');
+        setTfliteRunner(modeloCargado);
+        setCargandoModelo(false);
       } catch (err) {
-        console.error("Error crítico al inicializar el modelo TFLite:", err);
-        setErrorModelo(true);
+        console.error("Error cargando TFLite:", err);
+        setError("No se pudo cargar el archivo 'model.tflite'. Asegúrate de que esté dentro de la carpeta /public.");
+        setCargandoModelo(false);
       }
     }
-    cargarModelo();
+
+    cargarBibliotecaTFLite();
   }, []);
 
-  const manejarCambioImagen = (e) => {
+  const manejarImagen = (e) => {
     const file = e.target.files[0];
-    if (file) {
-      setImagen(file);
-      setVistaPrevia(URL.createObjectURL(file));
-      setResultado(null); // Limpiar predicciones anteriores
-    }
+    if (!file) return;
+    setImagenUrl(URL.createObjectURL(file));
+    setResultado(null);
+    setError(null);
   };
 
-  // 2. Procesar la imagen mediante tensores de TFJS y ejecutar la predicción
-  const analizarImagenLocal = async () => {
-    if (!imagen || !modelo || !window.tf) return;
-    setCargando(true);
+  // 2. Inferencia y preprocesamiento de matrices sin Canvas intermedio
+  const analizarImagen = async () => {
+    if (!tfliteRunner || !imageRef.current) return;
 
-    try {
-      // Creamos un elemento de imagen HTML temporal para alimentar a TensorFlow.js
-      const imgElement = document.createElement("img");
-      imgElement.src = vistaPrevia;
+    setAnalizando(true);
+    setError(null);
 
-      imgElement.onload = async () => {
-        // tf.tidy limpia automáticamente la memoria de los tensores intermedios
-        const tensor = window.tf.tidy(() => {
-          return window.tf.browser.fromPixels(imgElement)
-            .resizeNearestNeighbor([224, 224]) // 👈 Cambia a [128, 128] si tu CNN usa ese tamaño
-            .toFloat()
-            .div(window.tf.scalar(255.0))             // Normalizar píxeles de [0, 255] a [0, 1]
-            .expandDims(0);                    // Cambiar el shape a formato Batch: [1, 224, 224, 3]
+    setTimeout(async () => {
+      try {
+        const entradaTensor = window.tf.tidy(() => {
+          const pixelesOriginales = window.tf.browser.fromPixels(imageRef.current);
+
+          const redimensionado = window.tf.image.resizeBilinear(
+            pixelesOriginales.toFloat(),
+            [TAMANO_MODELO, TAMANO_MODELO]
+          );
+
+          return redimensionado.expandDims(0);
         });
 
-        // Ejecutar inferencia local usando el modelo cargado de la CDN
-        const predictionsTensor = modelo.predict(tensor);
-        const probabilidadesArray = await predictionsTensor.data(); // Convertir tensor a Array de JS
+        const salidaTensor = tfliteRunner.predict(entradaTensor);
+        const probabilidades = await salidaTensor.data();
 
-        // Encontrar la clase con mayor nivel de confianza (probabilidad más alta)
-        const indiceMaximo = probabilidadesArray.indexOf(Math.max(...probabilidadesArray));
-        const clasePredicha = `clase_${indiceMaximo}`;
+        entradaTensor.dispose();
+        salidaTensor.dispose();
 
-        // Guardar la respuesta con la misma estructura exacta que usaba tu backend
+        // Encontrar la clase dominante
+        const idxMaximo = probabilidades.indexOf(Math.max(...probabilidades));
+        const listaClaves = Object.keys(CLASES);
+
         setResultado({
-          clase_predicha: clasePredicha,
+          clasePredicha: listaClaves[idxMaximo],
           probabilidades: {
-            "clase_0": probabilidadesArray[0] || 0,
-            "clase_1": probabilidadesArray[1] || 0,
-            "clase_2": probabilidadesArray[2] || 0
+            clase_0: probabilidades[0] || 0,
+            clase_1: probabilidades[1] || 0,
+            clase_2: probabilidades[2] || 0
           }
         });
 
-        // Liberar manualmente los tensores principales para no congelar el navegador
-        tensor.dispose();
-        predictionsTensor.dispose();
-        setCargando(false);
-      };
-    } catch (err) {
-      console.error("Error durante la inferencia local:", err);
-      setCargando(false);
-    }
+      } catch (err) {
+        console.error("Error en inferencia web:", err);
+        setError("Error matemático al procesar la predicción del modelo TFLite.");
+      } finally {
+        setAnalizando(false);
+      }
+    }, 250);
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col items-center justify-center p-6 antialiased">
-      <div className="w-full max-w-2xl bg-white border border-slate-200 rounded-2xl shadow-xl shadow-slate-200/50 p-6 md:p-8">
-        
-        {/* Encabezado con el estado en tiempo real del modelo */}
-        <div className="mb-8 text-center">
-          <h2 className="text-3xl font-extrabold tracking-tight text-teal-600">
-            Clasificador TFLite Local
-          </h2>
-          <p className="text-slate-500 mt-2 text-sm sm:text-base">
-            {modelo 
-              ? "Red Neuronal cargada con éxito. Listo para procesar de forma local." 
-              : errorModelo 
-                ? "Error de inicialización. Verifica el formato del archivo 'model.tflite'"
-                : "Descargando e inyectando estructura de la Red Neuronal..."}
-          </p>
+    <div className="p-6 max-w-4xl mx-auto space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold text-teal-800">Clasificador CNN Inteligente</h1>
+        <p className="text-slate-500 mt-1">
+          Inferencia local veloz ejecutando tu archivo <strong>model.tflite</strong> mediante WebAssembly.
+        </p>
+      </div>
+
+      {/* Estados de Alerta */}
+      {cargandoModelo && (
+        <div className="bg-teal-50 border border-teal-200 text-teal-800 p-4 rounded-xl flex items-center gap-3">
+          <RefreshCw className="animate-spin text-teal-600" size={20} />
+          <span className="font-medium">Iniciando entorno WebAssembly y cargando model.tflite...</span>
         </div>
+      )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          
-          {/* Bloque Izquierdo: Input y Botón de Acción */}
-          <div className="flex flex-col justify-between space-y-4">
-            <label className="flex flex-col items-center justify-center w-full h-64 border-2 border-slate-300 border-dashed rounded-xl cursor-pointer bg-slate-50 hover:bg-teal-50/50 hover:border-teal-400 transition-all group overflow-hidden relative">
-              {vistaPrevia ? (
-                <img 
-                  src={vistaPrevia} 
-                  alt="Vista previa" 
-                  className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-300"
-                />
-              ) : (
-                <div className="flex flex-col items-center justify-center pt-5 pb-6 text-center px-4">
-                  <svg className="w-10 h-10 mb-3 text-slate-400 group-hover:text-teal-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                  </svg>
-                  <p className="mb-2 text-sm text-slate-600 font-semibold">Haz clic para subir una imagen</p>
-                  <p className="text-xs text-slate-400">Formatos válidos: PNG, JPG o JPEG</p>
-                </div>
-              )}
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={manejarCambioImagen}
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-800 p-4 rounded-xl flex items-center gap-3">
+          <AlertTriangle className="text-red-600" size={20} />
+          <span className="font-medium">{error}</span>
+        </div>
+      )}
+
+      {/* Grid de Interfaz */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        
+        {/* Panel Izquierdo: Control de Imagen */}
+        <div className="flex flex-col space-y-4">
+          <div 
+            onClick={() => !cargandoModelo && fileInputRef.current.click()}
+            className={`border-2 border-dashed rounded-2xl h-80 flex flex-col items-center justify-center p-4 transition-all overflow-hidden ${
+              cargandoModelo ? 'bg-slate-50 border-slate-200 cursor-not-allowed' : 'border-slate-300 hover:border-teal-500 bg-white cursor-pointer'
+            }`}
+          >
+            <input type="file" ref={fileInputRef} onChange={manejarImagen} accept="image/*" className="hidden" disabled={cargandoModelo} />
+
+            {imagenUrl ? (
+              <img 
+                ref={imageRef} 
+                src={imagenUrl} 
+                alt="Muestra de lesión cutánea" 
+                className="h-full w-full object-cover rounded-xl"
+                crossOrigin="anonymous"
               />
-            </label>
-
-            <button
-              onClick={analizarImagenLocal}
-              disabled={!imagen || cargando || !modelo}
-              className={`w-full py-3 px-4 font-semibold rounded-xl transition-all flex items-center justify-center gap-2 ${
-                !imagen || cargando || !modelo
-                  ? "bg-slate-100 text-slate-400 cursor-not-allowed"
-                  : "bg-teal-600 hover:bg-teal-700 text-white shadow-lg shadow-teal-600/20 active:scale-[0.98]"
-              }`}
-            >
-              {cargando ? (
-                <>
-                  <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                  <span>Calculando inferencia...</span>
-                </>
-              ) : (
-                "Analizar Imagen"
-              )}
-            </button>
-          </div>
-
-          {/* Bloque Derecho: Visualización de resultados */}
-          <div className="flex flex-col justify-center bg-slate-50 rounded-xl p-5 border border-slate-100">
-            {resultado ? (
-              <div className="space-y-5">
-                <div>
-                  <span className="text-xs font-bold uppercase tracking-wider text-teal-600">Diagnóstico Detectado</span>
-                  <h3 className="text-2xl font-bold text-slate-900 mt-1 capitalize">
-                    {MAPEO_CLASES[resultado.clase_predicha] || resultado.clase_predicha}
-                  </h3>
-                </div>
-
-                <div className="border-t border-slate-200 pt-4">
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400 block mb-3">Distribución de Confianza</span>
-                  <div className="space-y-3">
-                    {Object.entries(resultado.probabilidades).map(([clase, prob]) => {
-                      const porcentaje = (prob * 100).toFixed(1);
-                      const esGanador = clase === resultado.clase_predicha;
-                      const nombreLegible = MAPEO_CLASES[clase] || clase;
-                      
-                      return (
-                        <div key={clase} className="space-y-1">
-                          <div className="flex justify-between text-xs font-medium">
-                            <span className={`capitalize ${esGanador ? 'text-teal-600 font-bold' : 'text-slate-600'}`}>
-                              {nombreLegible}
-                            </span>
-                            <span className={esGanador ? 'text-teal-600 font-bold' : 'text-slate-500'}>
-                              {porcentaje}%
-                            </span>
-                          </div>
-                          <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
-                            <div 
-                              className={`h-full transition-all duration-500 ease-out rounded-full ${esGanador ? 'bg-teal-500' : 'bg-slate-400'}`}
-                              style={{ width: `${porcentaje}%` }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
             ) : (
-              <div className="text-center p-4">
-                <p className="text-sm text-slate-400">
-                  {cargando ? "Evaluando capas densas del modelo..." : "Sube una captura de la lesión cutánea para iniciar el análisis local."}
-                </p>
+              <div className="text-center space-y-2 text-slate-400">
+                <ImagePlus size={48} className="mx-auto text-slate-300" />
+                <p className="font-medium text-sm">Cargar fotografía de la lesión</p>
+                <p className="text-xs">Los datos se procesan localmente</p>
               </div>
             )}
           </div>
 
+          {imagenUrl && !cargandoModelo && (
+            <button
+              onClick={analizarImagen}
+              disabled={analizando}
+              className="w-full bg-teal-600 text-white font-semibold p-3 rounded-xl hover:bg-teal-700 transition-colors shadow-md disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {analizando ? (
+                <>
+                  <RefreshCw className="animate-spin" size={20} />
+                  Calculando tensores...
+                </>
+              ) : (
+                'Iniciar Inferencia Local'
+              )}
+            </button>
+          )}
+        </div>
+
+        {/* Panel Derecho: Visualización de Resultados */}
+        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 flex flex-col justify-between">
+          <div>
+            <h2 className="text-xs font-bold text-slate-400 tracking-wider uppercase mb-4">Resultados de la Red Neuronal</h2>
+            
+            {!resultado && !analizando && (
+              <div className="h-48 flex items-center justify-center text-center text-slate-400 text-sm">
+                Sube una muestra biológica para evaluar probabilidades estadísticas.
+              </div>
+            )}
+
+            {analizando && (
+              <div className="h-48 flex flex-col items-center justify-center space-y-3">
+                <div className="w-12 h-12 border-4 border-teal-600 border-t-transparent rounded-full animate-spin"></div>
+                <p className="text-sm text-slate-500 font-medium">Decodificando matrices de color...</p>
+              </div>
+            )}
+
+            {resultado && (
+              <div className="space-y-6">
+                {/* Alerta de Ganador */}
+                <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex items-start gap-3">
+                  <CheckCircle className="text-teal-600 shrink-0 mt-1" size={24} />
+                  <div>
+                    <span className="block text-xs font-bold text-teal-600 tracking-wider uppercase">Predicción Máxima</span>
+                    <span className="text-2xl font-extrabold text-slate-800">{CLASES[resultado.clasePredicha]}</span>
+                  </div>
+                </div>
+
+                {/* Barras de Progreso */}
+                <div className="space-y-3">
+                  <h3 className="text-xs font-bold text-slate-400 tracking-wider uppercase">Distribución de Confianza</h3>
+                  {Object.entries(resultado.probabilidades).map(([clase, probabilidad]) => {
+                    const porcentaje = (probabilidad * 100).toFixed(1);
+                    const esGanador = resultado.clasePredicha === clase;
+
+                    return (
+                      <div key={clase} className="space-y-1">
+                        <div className="flex justify-between text-sm font-medium text-slate-700">
+                          <span className={esGanador ? "text-slate-900 font-bold" : ""}>{CLASES[clase]}</span>
+                          <span>{porcentaje}%</span>
+                        </div>
+                        <div className="w-full bg-slate-200 rounded-full h-2">
+                          <div 
+                            className={`h-2 rounded-full transition-all duration-500 ${esGanador ? 'bg-teal-600' : 'bg-slate-400'}`} 
+                            style={{ width: `${porcentaje}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="mt-6 text-[11px] text-slate-400 leading-relaxed border-t border-slate-200 pt-4">
+            * <strong>Aviso legal:</strong> Los resultados son puramente estadísticos y de apoyo educativo basados en una Red Neuronal Convolucional. No reemplazan un diagnóstico médico definitivo realizado por un dermatólogo.
+          </div>
         </div>
 
       </div>

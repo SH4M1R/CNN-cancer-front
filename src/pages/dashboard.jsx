@@ -11,7 +11,7 @@ export default function Dashboard() {
             Proyecto Inteligencia Artificial - CNN
           </span>
           <h1 className="text-3xl md:text-5xl font-black tracking-tight mt-3">
-            Plataforma SKIN-CANCER
+            Plataforma SKIN-SCAN
           </h1>
           <p className="text-teal-50 mt-4 text-sm md:text-base leading-relaxed opacity-90">
             Una herramienta digital diseñada para la detección temprana y pre-diagnóstico de anomalías en la piel a través de Redes Neuronales Convolucionales (CNN), optimizando los tiempos de respuesta frente al cáncer cutáneo.
@@ -93,7 +93,7 @@ export default function Dashboard() {
             Nuestra Función
           </h3>
           <p className="text-sm text-slate-600 leading-relaxed mb-4">
-            <strong>SKIN-CANCER</strong> nace para mitigar esta brecha tecnológica. Utilizando una red neuronal profunda, la aplicación clasifica instantáneamente imágenes dermatológicas en tres categorías esenciales.
+            <strong>SKIN-SCAN</strong> nace para mitigar esta brecha tecnológica. Utilizando una red neuronal profunda, la aplicación clasifica instantáneamente imágenes dermatológicas en tres categorías esenciales.
           </p>
           <p className="text-sm text-slate-600 leading-relaxed">
             Sirve como un mecanismo de <em>triage</em> o cribado rápido para alertar a los usuarios si una marca cutánea presenta características de urgencia clínica, incentivando la consulta médica inmediata.
