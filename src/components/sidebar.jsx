@@ -6,7 +6,7 @@ const Sidebar = () => {
 
   const menuItems = [
     { name: 'Dashboard', icon: <Home size={20} />, path: '/' },
-    { name: 'Historial', icon: <History size={20} />, path: '/historial' },
+    { name: 'Descargar', icon: <History size={20} />, path: '/Descargar' },
     { name: 'Predicción', icon: <Info size={20} />, path: '/prediccion' },
     { name: 'Información', icon: <Info size={20} />, path: '/informacion' },
   ];

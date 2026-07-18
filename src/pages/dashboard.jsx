@@ -1,4 +1,4 @@
-import { ShieldCheck, Activity, AlertTriangle, ArrowRight } from "lucide-react";
+import { ShieldCheck, Activity, AlertTriangle, ArrowRight, Download } from "lucide-react";
 
 export default function Dashboard() {
   return (
@@ -16,13 +16,24 @@ export default function Dashboard() {
           <p className="text-teal-50 mt-4 text-sm md:text-base leading-relaxed opacity-90">
             Una herramienta digital diseñada para la detección temprana y pre-diagnóstico de anomalías en la piel a través de Redes Neuronales Convolucionales (CNN), optimizando los tiempos de respuesta frente al cáncer cutáneo.
           </p>
-          <div className="mt-6">
+          
+          {/* Botones de acción integrados */}
+          <div className="mt-6 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
             <a 
               href="/prediccion" 
-              className="inline-flex items-center gap-2 bg-white text-teal-700 font-bold px-5 py-3 rounded-xl shadow-md hover:bg-teal-50 transition-all transform active:scale-95 text-sm"
+              className="inline-flex items-center justify-center gap-2 bg-white text-teal-700 font-bold px-5 py-3 rounded-xl shadow-md hover:bg-teal-50 transition-all transform active:scale-95 text-sm"
             >
               Comenzar Análisis Técnico
               <ArrowRight size={18} />
+            </a>
+            
+            {/* Acceso rápido a la descarga */}
+            <a 
+              href="/descargar" 
+              className="inline-flex items-center justify-center gap-2 bg-teal-500/30 text-teal-100 font-bold px-5 py-3 rounded-xl border border-teal-400/30 hover:bg-teal-500/50 transition-all transform active:scale-95 text-sm"
+            >
+              <Download size={18} />
+              Descargar App Móvil
             </a>
           </div>
         </div>
@@ -64,7 +75,7 @@ export default function Dashboard() {
       </div>
 
       {/* Sección Informativa Primaria: Propósito y Problematica */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
           <h3 className="text-lg font-bold text-slate-900 border-b border-slate-100 pb-3 mb-3">
             La Problemática
@@ -88,6 +99,21 @@ export default function Dashboard() {
             Sirve como un mecanismo de <em>triage</em> o cribado rápido para alertar a los usuarios si una marca cutánea presenta características de urgencia clínica, incentivando la consulta médica inmediata.
           </p>
         </div>
+      </div>
+
+      {/* Banner inferior de invitación a descargar la App Móvil */}
+      <div className="bg-slate-50 border border-dashed border-slate-300 rounded-2xl p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="text-center sm:text-left">
+          <h4 className="text-base font-bold text-slate-900">¿Prefieres usarlo desde tu smartphone?</h4>
+          <p className="text-xs text-slate-500 mt-0.5">Descarga nuestra versión nativa para Android y analiza lesiones usando la cámara en tiempo real.</p>
+        </div>
+        <a 
+          href="/descargar" 
+          className="inline-flex items-center gap-2 bg-teal-50 hover:bg-teal-100 border border-teal-200 text-teal-700 text-xs font-bold px-4 py-2.5 rounded-xl transition-all whitespace-nowrap"
+        >
+          <Download size={14} />
+          Obtener SkinScan.apk
+        </a>
       </div>
 
     </div>

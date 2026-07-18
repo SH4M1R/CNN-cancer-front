@@ -1,7 +1,7 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import Sidebar from "./components/sidebar.jsx"; 
 import Dashboard from "./pages/dashboard.jsx";
-import Historial from "./pages/historial.jsx";
+import DescargarApp from "./pages/descargar";
 import Informacion from "./pages/informacion.jsx";
 import Prediccion from "./pages/prediccion.jsx";
 
@@ -24,7 +24,7 @@ function App() {
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/prediccion" element={<Prediccion />} />
-            <Route path="/historial" element={<Historial />} />
+            <Route path="/descargar" element={<DescargarApp />} />
             <Route path="/informacion" element={<Informacion />} />
             
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
